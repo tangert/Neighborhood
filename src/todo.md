@@ -1,0 +1,4 @@
+- [ ] validate data object for each cell with joi
+- [ ] hook up run button to run all cells and update the grid immutably
+- [ ] refactor function declaration 
+- [ ] give each cell access to neighbors.
