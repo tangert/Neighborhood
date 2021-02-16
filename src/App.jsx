@@ -8,7 +8,7 @@ import { Flipper, Flipped } from "react-flip-toolkit";
 import useOutsideClick from './hooks/useOutsideClick';
 import { useBrush, inBounds } from "react-use-brush";
 
-const GRID_SIZE = 20;
+const GRID_SIZE = 10;
 
 function getValidNeighborCoords(x,y) {
   const allNeighbors = {
@@ -203,11 +203,21 @@ function createCellFunction(source) {
                       source);
 }
 
+function isNumeric(str) {
+  if (typeof str != "string") return false // we only process strings!  
+  return !isNaN(str) && // use type coercion to parse the _entirety_ of the string (`parseFloat` alone does not do this)...
+         !isNaN(parseFloat(str)) // ...and ensure strings of whitespace fail
+}
+
+
+const delay = ms => new Promise(res => setTimeout(res, ms));
+
+
 function App() {
   const [grid, setGrid] = useState(createGrid(GRID_SIZE, CellModel))
   const [selectedCell, setSelectedCell] = useState([0,0]);
   const [isEditing, setIsEditing] = useState(false);
-  // const [state, rect, rectRef, bind, selection] = useBrush();
+  const [runCount, setRunCount] = useState(1);
 
   // Globally available values for the function to call.
   // calculated form the base grid
@@ -219,7 +229,7 @@ function App() {
   function runCells() {
     // go through every cell and run its function
     // run the cells, grab the state changes
-    var t0 = performance.now()
+    // var t0 = performance.now()
     const updates = []
     // first filter which ones have funcs
     // then map the func outputs
@@ -252,14 +262,31 @@ function App() {
       setGrid(newGrid)
     }
     
-    var t1 = performance.now()
-    console.log("Running cells took " + (t1 - t0) + " ms.")
+    // var t1 = performance.now()
+    // console.log("Running cells took " + (t1 - t0) + " ms.")
+  }
+
+  const handleRun = async () => {
+    let intRun = parseInt(runCount);
+    if(!Number.isNaN(intRun) && intRun <= 100) {
+      for(let i = 0; i < intRun; i++) {
+        runCells();
+        await delay(1);
+      }
+    } else {
+      // run once by default.
+      runCells();
+    }
   }
 
   return (
     <Flipper flipKey={isEditing}>
     <div className="App">
-      <button onClick={()=>runCells()}>run</button>
+      <div style={{padding: 8}}>
+      <button onClick={handleRun}>run</button>
+      <input placeholder="run times" value={runCount} onChange={(e)=> setRunCount(e.target.value)}/>
+      {/* checkbox for looping? */}
+      </div>
       <GridWrapper>
         {
           grid.map(row => 
