@@ -4,10 +4,38 @@ import styled from 'styled-components'
 import AceEditor from "react-ace";
 import "ace-builds/src-noconflict/mode-javascript";
 import "ace-builds/src-noconflict/theme-github";
+import "ace-builds/src-min-noconflict/ext-language_tools";
+import "ace-builds/src-noconflict/snippets/javascript";
 import { Flipper, Flipped } from "react-flip-toolkit";
 import useOutsideClick from './hooks/useOutsideClick';
 
+
 const GRID_SIZE = 25;
+
+// formats and used as a global function
+function rgba(r,g,b,a) {
+  return {
+    r,
+    g,
+    b,
+    a: a || 1
+  }
+}
+
+// globally available colors
+const COLORS = {
+  black: rgba(0,0,0),
+  white: rgba(255,255,255),
+  blue: rgba(0,122,255),
+  green: rgba(52,199,89),
+  indigo: rgba(88,86,214),
+  orange: rgba(255,149,0),
+  pink: rgba(255,45,85),
+  purple: rgba(175,82,222),
+  red: rgba(255,59,48),
+  teal: rgba(90,200,250),
+  yellow: rgba(255,204,0),
+}
 
 function getValidNeighborCoords(x,y) {
   const allNeighbors = {
@@ -20,6 +48,7 @@ function getValidNeighborCoords(x,y) {
       left: [x-1, y],
       topLeft: [x-1, y-1]
   }
+  // Only returns neighbors that are in the bounds of the grid for every cell.
   return Object.fromEntries(
           Object.entries(allNeighbors)
                   .filter(e =>
@@ -95,12 +124,12 @@ const CellWrapper = styled.div`
     justify-content: center;
     border: 1px solid rgba(0,0,0,0.05);
     height: 100%;
-    transition: box-shadow 0.1s;
     cursor: pointer;
 
     &:hover {
       transform: scale(1.1);
       box-shadow: 0 0 16px 0 rgba(0,0,0,0.2);
+      border-color: black;
     }
 `
 
@@ -112,7 +141,7 @@ function Cell({ cell, onClick, isSelected }) {
   const { data } = cell;
   let color;
   if(data.hasOwnProperty("color")) {
-    color = data["color"];
+    color = data.color;
   }
   return (
     <Flipped flipId={getCellId(cell)}>
@@ -152,6 +181,7 @@ const CellEditorHeader = styled.div`
   padding: 16px;
   width: 100%;
   justify-content: space-between;
+  align-items: start;
 `
 
 function CellEditor({ grid, selectedCell, isEditing, onClose, onApplyToAll }) {
@@ -160,7 +190,7 @@ function CellEditor({ grid, selectedCell, isEditing, onClose, onApplyToAll }) {
   const cell = grid[y][x];
   
   // TODO: set an initial value based on the base function.
-  const [value, setValue] = useState(grid[y][x]["source"]);
+  const [value, setValue] = useState(grid[y][x].source);
 
   useOutsideClick(ref, () => {
     isEditing && onClose(value);
@@ -171,11 +201,14 @@ function CellEditor({ grid, selectedCell, isEditing, onClose, onApplyToAll }) {
         <Flipped flipId={isEditing ? getCellId(cell) : null}>
           <CellEditorWrapper ref={ref}>
             <CellEditorHeader>
-              <div style={{display: 'flex', flexDirection: 'column', alignItems: 'start', textAlign: 'start'}}>
+              <div style={{display: 'flex', flexDirection: 'column', alignItems: 'start', justifyContent: 'center', textAlign: 'start'}}>
               <h1>Cell {cell.x},{cell.y}</h1>
-              <h4>Parameters: "grid", "rows", "cols", "cells", "cell"</h4>
+              <h4>Input: <code>grid</code>, <code>rows</code>, <code>cols</code>, <code>cells</code>, <code>cell</code>,
+              <code>time</code>,
+              <code>colors</code>
+              </h4>
               </div>
-              <button onClick={()=>onApplyToAll(value)}>Apply to all</button>
+              <button onClick={()=>onApplyToAll(value)}>Copy to all cells</button>
             </CellEditorHeader>
             <AceEditor
               onChange={(val) => setValue(val)}
@@ -187,6 +220,9 @@ function CellEditor({ grid, selectedCell, isEditing, onClose, onApplyToAll }) {
               fontSize={14}
               editorProps={{ $blockScrolling: false }}
               style={{width: '100%', height: '100%'}}
+              enableBasicAutocompletion={true}
+              enableLiveAutocompletion={true}
+              enableSnippets={true}
             />
           </CellEditorWrapper>
         </Flipped>
@@ -202,16 +238,22 @@ function createCellFunction(source) {
                       "cols",
                       "cells",
                       "cell",
+                      "time",
+                      "colors",
+                      "log",
+                      "rgba",
                       source);
 }
 
 const delay = ms => new Promise(res => setTimeout(res, ms));
+const log = (s) => console.log(s);
 
 function App() {
   const [grid, setGrid] = useState(createGrid(GRID_SIZE, CellModel))
   const [selectedCell, setSelectedCell] = useState([0,0]);
   const [isEditing, setIsEditing] = useState(false);
   const [runCount, setRunCount] = useState(1);
+  const [delayTime, setDelayTime] = useState(1);
 
   // Globally available values for the function to call.
   // calculated form the base grid
@@ -228,11 +270,23 @@ function App() {
     // first filter which ones have funcs
     // then map the func outputs
 
+    // one time for each cell run.
+    const time = new Date().getTime();
+
     cells.forEach(cell => {
-      if(cell["func"] !== null) {
+      if(cell.func !== null) {
         const { x, y, func } = cell;
-        // Takes out the out of bounds
-        const output = func(grid, rows, cols, cells, cell);
+
+        // Add a random color to each cell.
+        const colors = {
+          ...COLORS,
+          random: rgba(Math.random()*255,
+                       Math.random()*255,
+                       Math.random()*255)
+        };
+
+        const output = func(grid, rows, cols, cells, cell, time, colors, log, rgba);
+
         //provide defaults while destructuring
         if (output &&
             output.constructor === Object) {
@@ -261,11 +315,16 @@ function App() {
   }
 
   const handleRun = async () => {
-    let intRun = parseInt(runCount);
-    if(!Number.isNaN(intRun) && intRun <= 100) {
+    const intRun = parseInt(runCount);
+    const intDelay = parseInt(delayTime);
+    const validDelay = !Number.isNaN(intDelay) ? intDelay : 1;
+
+    if(!Number.isNaN(intRun) && intRun <= 1000) {
       for(let i = 0; i < intRun; i++) {
         runCells();
-        await delay(1);
+        if(validDelay > 0) {
+          await delay(validDelay);
+        }
       }
     } else {
       // run once by default.
@@ -276,10 +335,25 @@ function App() {
   return (
     <Flipper flipKey={isEditing}>
     <div className="App">
-      <div style={{padding: 8}}>
-      <button onClick={handleRun}>run</button>
-      <input placeholder="run times" value={runCount} onChange={(e)=> setRunCount(e.target.value)}/>
-      {/* checkbox for looping? */}
+      
+      <div style={{display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'center', padding: '8px' }}>
+
+      <button
+        className="run-button"
+        onClick={handleRun}>
+        Run
+      </button>
+
+        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '8px' }}>
+          <span className="input-title">Repeat</span>
+          <input className="run-time" placeholder="1" value={runCount} onChange={(e)=> setRunCount(e.target.value)}/>
+        </div>
+
+        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '8px' }}>
+          <span className="input-title">Delay (ms)</span>
+          <input className="run-time" placeholder="1" value={delayTime} onChange={(e)=> setDelayTime(e.target.value)}/>
+        </div>
+
       </div>
       <GridWrapper>
         {
@@ -325,15 +399,15 @@ function App() {
                     const newGrid = [...grid];
                     const [x, y] = selectedCell;
 
-                    if(value !== grid[y][x]["source"] &&
-                      !grid[y][x]["isEdited"]) {
+                    if(value !== grid[y][x].source &&
+                      !grid[y][x].isEdited) {
                       
                       // if it hasnt been edited before and the value has changed, set edited to true
-                      newGrid[y][x]["isEdited"] = true
+                      newGrid[y][x].isEdited = true
                     }
 
-                    newGrid[y][x]["source"] = value;
-                    newGrid[y][x]["func"] = createCellFunction(value);
+                    newGrid[y][x].source = value;
+                    newGrid[y][x].func = createCellFunction(value);
                     setGrid(newGrid)
                   }}/>
           )

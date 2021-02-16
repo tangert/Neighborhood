@@ -7,4 +7,74 @@
   padding: 0;
   margin: 0;
   box-sizing: border-box;
+
+  --focus-shadow: 0 0 0 4px rgba(0, 68, 255, 0.25);
+}
+
+button {
+  display: inline-block;
+  border: none;
+  background-color: royalblue;
+  color: white;
+  font-weight: 700;
+  border-radius: 8px;
+  white-space: nowrap;
+  cursor: pointer;
+  padding: 8px 16px;
+  transition: 0.2s box-shadow;
+}
+
+button:focus {
+  outline: none;
+  box-shadow: var(--focus-shadow);
+}
+
+.run-button {
+  margin-right: 4px;
+}
+
+input {
+  border: 1px solid rgba(0,0,0,0.2);
+  border-radius: 8px;
+  height: 100%;
+  padding: 4px;
+  transition: 0.2s box-shadow;
+  width: auto;
+}
+
+.run-time {
+  text-align: center;
+  width: 50px;
+}
+
+input:hover, input:focus {
+  border-color: royalblue;
+  outline: none;
+}
+
+input:focus {
+  box-shadow: var(--focus-shadow);
+}
+
+.input-title {
+  font-size: 0.75em;
+  margin-bottom: 4px;
+  opacity: 0.5;
+}
+
+h1 {
+  font-weight: 800;
+}
+
+h4 {
+  color: rgba(0,0,0,0.4);
+}
+
+code {
+  padding: 2px;
+  font-weight: 700;
+  font-size: 0.8em;
+  background: rgba(0,0,0,0.05);
+  border-radius: 4px;
+  color: rgb(255, 84, 178);
 }
