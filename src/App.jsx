@@ -6,9 +6,8 @@ import "ace-builds/src-noconflict/mode-javascript";
 import "ace-builds/src-noconflict/theme-github";
 import { Flipper, Flipped } from "react-flip-toolkit";
 import useOutsideClick from './hooks/useOutsideClick';
-import { useBrush, inBounds } from "react-use-brush";
 
-const GRID_SIZE = 10;
+const GRID_SIZE = 25;
 
 function getValidNeighborCoords(x,y) {
   const allNeighbors = {
@@ -172,7 +171,10 @@ function CellEditor({ grid, selectedCell, isEditing, onClose, onApplyToAll }) {
         <Flipped flipId={isEditing ? getCellId(cell) : null}>
           <CellEditorWrapper ref={ref}>
             <CellEditorHeader>
+              <div style={{display: 'flex', flexDirection: 'column', alignItems: 'start', textAlign: 'start'}}>
               <h1>Cell {cell.x},{cell.y}</h1>
+              <h4>Parameters: "grid", "rows", "cols", "cells", "cell"</h4>
+              </div>
               <button onClick={()=>onApplyToAll(value)}>Apply to all</button>
             </CellEditorHeader>
             <AceEditor
@@ -203,15 +205,7 @@ function createCellFunction(source) {
                       source);
 }
 
-function isNumeric(str) {
-  if (typeof str != "string") return false // we only process strings!  
-  return !isNaN(str) && // use type coercion to parse the _entirety_ of the string (`parseFloat` alone does not do this)...
-         !isNaN(parseFloat(str)) // ...and ensure strings of whitespace fail
-}
-
-
 const delay = ms => new Promise(res => setTimeout(res, ms));
-
 
 function App() {
   const [grid, setGrid] = useState(createGrid(GRID_SIZE, CellModel))
@@ -340,7 +334,6 @@ function App() {
 
                     newGrid[y][x]["source"] = value;
                     newGrid[y][x]["func"] = createCellFunction(value);
-
                     setGrid(newGrid)
                   }}/>
           )
