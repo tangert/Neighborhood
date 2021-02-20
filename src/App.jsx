@@ -10,6 +10,11 @@ import { Flipper, Flipped } from "react-flip-toolkit";
 import useOutsideClick from './hooks/useOutsideClick';
 import { GrPowerReset } from 'react-icons/gr';
 
+// Examples
+import gameOfLife from './examples/gameOfLife';
+import randomColor from './examples/randomColor';
+import sineWave from './examples/sineWave';
+
 const GRID_SIZE = 20;
 
 const log = (s) => console.log(s);
@@ -188,9 +193,11 @@ const CellEditorHeader = styled.div`
 `
 
 function CellEditor({ grid, selectedCell, isEditing, onClose, onApplyToAll, onCodeSync, isCodeSynced }) {
+
   const ref = useRef();
   const [x, y] = selectedCell
   const cell = grid[y][x];
+  const [example, setExample] = useState("init");
   
   // TODO: set an initial value based on the base function.
   const [value, setValue] = useState(grid[y][x].source);
@@ -198,6 +205,26 @@ function CellEditor({ grid, selectedCell, isEditing, onClose, onApplyToAll, onCo
   useOutsideClick(ref, () => {
     isEditing && onClose(value);
   });
+
+  function getExample(){
+    switch(example){
+      case "init":
+      return null;
+      case "game-of-life":
+      return gameOfLife;
+      case "random-color":
+      return randomColor;
+      case "sine-wave":
+      return sineWave;
+      default:
+      return null;
+    }
+  }
+
+  React.useEffect(() => {
+    setValue(getExample())
+  }, [example])
+
 
   return (
     <CellEditorPageWrapper isEditing={isEditing}>
@@ -210,6 +237,16 @@ function CellEditor({ grid, selectedCell, isEditing, onClose, onApplyToAll, onCo
               <code>time</code>,
               <code>colors</code>
               </h4>
+              <div>
+              <select value={example} onChange={(e)=> {
+                setExample(e.target.value)
+              }}>
+                <option value="init">Set an example</option>
+                <option value="game-of-life">Game of life</option>
+                <option value="random-color">Random color</option>
+                <option selected value="sine-wave">Sine wave</option>
+              </select>
+              </div>
               </div>
 
               <div style={{display:'flex', alignItems: 'flex-end', flexDirection: 'column', textAlign: 'end', whiteSpace:'nowrap'}}>
@@ -290,9 +327,9 @@ function App() {
   const [grid, setGrid] = useState(()=>createGrid(GRID_SIZE, CellModel))
   const [selectedCell, setSelectedCell] = useState([0,0]);
   const [isEditing, setIsEditing] = useState(false);
-  const [runCount, setRunCount] = useState(10);
+  const [runCount, setRunCount] = useState(1);
   const [runsLeft, setRunsLeft] = useState(0);
-  const [delayTime, setDelayTime] = useState(50);
+  const [delayTime, setDelayTime] = useState(1);
   const [isCodeSynced, setIsCodeSynced] = useState(true);
 
   // Globally available values for the function to call.
@@ -358,13 +395,11 @@ function App() {
     return grid;
   }
 
-  React.useEffect( () => {
+  React.useEffect(() => {
 
-    // validate the parameters
-    // const intRun = parseInt(runCount);
-    // const intDelay = parseInt(delayTime);
-    // const validDelay = !Number.isNaN(intDelay) ? intDelay : 1;
-    // if(!Number.isNaN(intRun) && intRun <= 1000 && validDelay) {
+    const intRun = parseInt(runCount);
+    const intDelay = parseInt(delayTime);
+    const validDelay = !Number.isNaN(intDelay) ? intDelay : 1;
 
     function start(counter){
       // if the current runs left is still less 
@@ -375,7 +410,16 @@ function App() {
         }, delayTime);
       }
     }
-    start(runsLeft);
+
+    if(!Number.isNaN(intRun) && intRun <= 1000 && validDelay) {
+      start(runsLeft);
+    } else {
+      log('invalid')
+      // TODO: better validation for 0 delay.
+      // just run once by default if any parameters are invalid.
+      start(0);
+    }
+
   },[runsLeft]);
 
   return (
@@ -386,7 +430,7 @@ function App() {
 
       <button
         className="run-button"
-        onClick={()=>setRunsLeft(1)}>
+        onClick={()=>setRunsLeft(0)}>
         Run
       </button>
       

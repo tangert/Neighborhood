@@ -92,3 +92,16 @@ code {
   color: royalblue;
   background: white;
 }
+
+select {
+  border: 1px solid rgba(0,0,0,0.2);
+  color: rgba(0,0,0,0.75);
+  margin-top: 8px;
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+
+select:focus {
+  outline: none;
+  box-shadow: var(--focus-shadow);
+}
