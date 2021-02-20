@@ -1,5 +1,8 @@
+- [ ] fix neighbor access, make sure its pass by ref
 - [ ] refactor with styled jsx
 - [ ] separate out some component files
+- [ ] make cell selection with brush
+- [ ] inside of bounding box, check if any cells are in the ounding box based on coordiantes + size of cell isntead of doing div collisions (and throttle)
 - [ ] make neighbor data easier / copy each neighbors data, not just the acess
 - [ ] validate data object for each cell with joi
 - [ ] save to local storage

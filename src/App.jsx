@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import './App.css'
 import styled from 'styled-components'
 import AceEditor from "react-ace";
@@ -8,9 +8,11 @@ import "ace-builds/src-min-noconflict/ext-language_tools";
 import "ace-builds/src-noconflict/snippets/javascript";
 import { Flipper, Flipped } from "react-flip-toolkit";
 import useOutsideClick from './hooks/useOutsideClick';
+import { GrPowerReset } from 'react-icons/gr';
 
+const GRID_SIZE = 20;
 
-const GRID_SIZE = 25;
+const log = (s) => console.log(s);
 
 // formats and used as a global function
 function rgba(r,g,b,a) {
@@ -20,6 +22,11 @@ function rgba(r,g,b,a) {
     b,
     a: a || 1
   }
+}
+
+function renderRgbaString(color){
+  const { r, g, b, a } = color; 
+  return `rgba(${r},${g},${b},${a})`
 }
 
 // globally available colors
@@ -65,7 +72,8 @@ function CellModel(x = 0, y = 0) {
     source: '',
     // actual compiled function object
     func: null,
-    neighbors: getValidNeighborCoords(x,y),
+    neighborCoords: getValidNeighborCoords(x,y),
+    neighbors: {},
     data: {
       color: {
         r: 255,
@@ -109,11 +117,6 @@ const Row = styled.div`
   flex: 1;
   flex-wrap: nowrap;
 `
-
-function renderRgbaString(color){
-  const { r, g, b, a } = color; 
-  return `rgba(${r},${g},${b},${a})`
-}
 
 const CellWrapper = styled.div`
     display: flex;
@@ -184,7 +187,7 @@ const CellEditorHeader = styled.div`
   align-items: start;
 `
 
-function CellEditor({ grid, selectedCell, isEditing, onClose, onApplyToAll }) {
+function CellEditor({ grid, selectedCell, isEditing, onClose, onApplyToAll, onCodeSync, isCodeSynced }) {
   const ref = useRef();
   const [x, y] = selectedCell
   const cell = grid[y][x];
@@ -202,13 +205,18 @@ function CellEditor({ grid, selectedCell, isEditing, onClose, onApplyToAll }) {
           <CellEditorWrapper ref={ref}>
             <CellEditorHeader>
               <div style={{display: 'flex', flexDirection: 'column', alignItems: 'start', justifyContent: 'center', textAlign: 'start'}}>
-              <h1>Cell {cell.x},{cell.y}</h1>
+              <h1>{cell.x},{cell.y}</h1>
               <h4>Input: <code>grid</code>, <code>rows</code>, <code>cols</code>, <code>cells</code>, <code>cell</code>,
               <code>time</code>,
               <code>colors</code>
               </h4>
               </div>
-              <button onClick={()=>onApplyToAll(value)}>Copy to all cells</button>
+
+              <div style={{display:'flex', alignItems: 'flex-end', flexDirection: 'column', textAlign: 'end', whiteSpace:'nowrap'}}>
+                <span className="input-title">Sync to all cells</span>
+                <input className="checkbox" onChange={onCodeSync} checked={isCodeSynced} type="checkbox"/>
+              </div>
+
             </CellEditorHeader>
             <AceEditor
               onChange={(val) => setValue(val)}
@@ -242,18 +250,50 @@ function createCellFunction(source) {
                       "colors",
                       "log",
                       "rgba",
+                      "map",
                       source);
 }
 
-const delay = ms => new Promise(res => setTimeout(res, ms));
-const log = (s) => console.log(s);
+function map(val, in_min, in_max, out_min, out_max) {
+  return (val - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+function getNeighborData(grid, x,y) {
+  const cell = grid[y][x];
+  return Object.fromEntries(
+          Object.entries(cell.neighborCoords)
+                .map(e => {
+                      return {
+                      name: e[0],
+                      coords: e[1]
+                      }
+                })
+                .map(o => [
+                      o.name,
+                      grid[o.coords[1]][o.coords[0]]]
+                    )
+          )
+}
+
+function useAsyncState(initialValue) {
+  const [value, setValue] = useState(initialValue);
+  const setter = x =>
+    new Promise(resolve => {
+      setValue(x);
+      resolve(x);
+    });
+  return [value, setter];
+}
+
 
 function App() {
-  const [grid, setGrid] = useState(createGrid(GRID_SIZE, CellModel))
+  const [grid, setGrid] = useState(()=>createGrid(GRID_SIZE, CellModel))
   const [selectedCell, setSelectedCell] = useState([0,0]);
   const [isEditing, setIsEditing] = useState(false);
-  const [runCount, setRunCount] = useState(1);
-  const [delayTime, setDelayTime] = useState(1);
+  const [runCount, setRunCount] = useState(10);
+  const [runsLeft, setRunsLeft] = useState(0);
+  const [delayTime, setDelayTime] = useState(50);
+  const [isCodeSynced, setIsCodeSynced] = useState(true);
 
   // Globally available values for the function to call.
   // calculated form the base grid
@@ -285,7 +325,7 @@ function App() {
                        Math.random()*255)
         };
 
-        const output = func(grid, rows, cols, cells, cell, time, colors, log, rgba);
+        const output = func(grid, rows, cols, cells, cell, time, colors, log, rgba, map);
 
         //provide defaults while destructuring
         if (output &&
@@ -303,34 +343,40 @@ function App() {
     if(updates.length > 0) {
       const newGrid = [...grid];    
       
+      // after each cell is updated, go and update its neighbors data
       updates.forEach(uCell => {
-        newGrid[uCell.y][uCell.x] = uCell 
-      })
 
-      setGrid(newGrid)
-    }
-    
-    // var t1 = performance.now()
-    // console.log("Running cells took " + (t1 - t0) + " ms.")
-  }
-
-  const handleRun = async () => {
-    const intRun = parseInt(runCount);
-    const intDelay = parseInt(delayTime);
-    const validDelay = !Number.isNaN(intDelay) ? intDelay : 1;
-
-    if(!Number.isNaN(intRun) && intRun <= 1000) {
-      for(let i = 0; i < intRun; i++) {
-        runCells();
-        if(validDelay > 0) {
-          await delay(validDelay);
+        const neighbors = getNeighborData(grid, uCell.x,uCell.y);
+        newGrid[uCell.y][uCell.x] = {
+          ...uCell,
+          neighbors: neighbors
         }
-      }
-    } else {
-      // run once by default.
-      runCells();
+      })
+      return newGrid;
     }
+
+    return grid;
   }
+
+  React.useEffect( () => {
+
+    // validate the parameters
+    // const intRun = parseInt(runCount);
+    // const intDelay = parseInt(delayTime);
+    // const validDelay = !Number.isNaN(intDelay) ? intDelay : 1;
+    // if(!Number.isNaN(intRun) && intRun <= 1000 && validDelay) {
+
+    function start(counter){
+      // if the current runs left is still less 
+      if(counter < runCount){
+        setTimeout(function(){
+          setGrid(runCells())
+          setRunsLeft(counter+1)
+        }, delayTime);
+      }
+    }
+    start(runsLeft);
+  },[runsLeft]);
 
   return (
     <Flipper flipKey={isEditing}>
@@ -340,9 +386,10 @@ function App() {
 
       <button
         className="run-button"
-        onClick={handleRun}>
+        onClick={()=>setRunsLeft(1)}>
         Run
       </button>
+      
 
         <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '8px' }}>
           <span className="input-title">Repeat</span>
@@ -354,13 +401,20 @@ function App() {
           <input className="run-time" placeholder="1" value={delayTime} onChange={(e)=> setDelayTime(e.target.value)}/>
         </div>
 
+        <button
+          className="reset"
+          onClick={()=>setGrid(createGrid(GRID_SIZE, CellModel))}>
+            <GrPowerReset/>
+        </button>
+
       </div>
       <GridWrapper>
         {
-          grid.map(row => 
-            <Row>{
-              row.map(cell =>  
+          grid.map((row, ri) => 
+            <Row key={`row-${ri}`}>{
+              row.map((cell, ci) =>  
                   <Cell
+                    key={`cell-${ci}`}
                     onClick={()=>{
                       setIsEditing(true);
                       setSelectedCell([cell.x, cell.y]);
@@ -376,40 +430,37 @@ function App() {
         {
           isEditing && (
           <CellEditor
-                  isEditing={isEditing}
-                  grid={grid}
-                  selectedCell={selectedCell}
-                  // utility function for setting the same function in every cell.
-                  onApplyToAll={(value) => {
-                    const newGrid = grid.map(r =>
-                                       r.map(c => { 
-                                        return {
-                                          ...c,
-                                          source: value,
-                                          func: createCellFunction(value)
-                                        }
-                                      })
-                                    );
-                    setGrid(newGrid);
-                  }}
-                  onClose={(value)=>{
-                    setIsEditing(false);
-                    // setIsClosing(true);
-                    // set the function to the new value inside the editor.
-                    const newGrid = [...grid];
-                    const [x, y] = selectedCell;
+            isEditing={isEditing}
+            grid={grid}
+            selectedCell={selectedCell}
+            onCodeSync={(e) => setIsCodeSynced(e.target.checked)}
+            isCodeSynced={isCodeSynced}
+            // you can't presend the neighbor data. you need to grab it from the grid at runtime to get the latest data and do the calculation.
+            onClose={(value)=> {
+                setIsEditing(false);
+                if(isCodeSynced) {
+                  // set the same function everywhere if its synced
+                  const newGrid = grid.map(r =>
+                                    r.map(c => { 
+                                      return {
+                                        ...c,
+                                        source: value,
+                                        func: createCellFunction(value),
+                                      }
+                                    })
+                                  );
+                  setGrid(newGrid);
+                } else {
+                  // only apply to that cell
+                  const newGrid = [...grid];
+                  const [x, y] = selectedCell;
 
-                    if(value !== grid[y][x].source &&
-                      !grid[y][x].isEdited) {
-                      
-                      // if it hasnt been edited before and the value has changed, set edited to true
-                      newGrid[y][x].isEdited = true
-                    }
-
-                    newGrid[y][x].source = value;
-                    newGrid[y][x].func = createCellFunction(value);
-                    setGrid(newGrid)
-                  }}/>
+                  newGrid[y][x].source = value;
+                  newGrid[y][x].func = createCellFunction(value);
+                  setGrid(newGrid)
+                }
+              }
+            }/>
           )
         }
      
